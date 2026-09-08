@@ -1,59 +1,17 @@
 import hashlib
-import os
-
-import psycopg2
-from dotenv import load_dotenv
-
-load_dotenv()
 
 
-def get_db_connection():
-    connection_url = (
-        os.getenv("DATABASE_URL")
-        or os.getenv("CUSTOM_URL")
-        or os.getenv("STORAGE_POSTGRES_URL")
-        or os.getenv("STORAGE_POSTGRES_URL_NO_SSL")
-        or os.getenv("POSTGRES_URL")
-        or os.getenv("POSTGRES_PRISMA_URL")
-    )
-
-    if not connection_url:
-        raise RuntimeError("No se encontró una URL de conexión válida para PostgreSQL/Neon. Define DATABASE_URL o STORAGE_POSTGRES_URL en Vercel.")
-
-    return psycopg2.connect(connection_url)
+_users = {
+    "admin": {
+        "username": "admin",
+        "password_hash": hashlib.sha256(b"admin123").hexdigest(),
+        "role": "admin",
+    }
+}
 
 
 def init_db():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'user'
-            )
-            """
-        )
-
-        cur.execute("SELECT username FROM users WHERE username = %s", ("admin",))
-        if cur.fetchone() is None:
-            cur.execute(
-                "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)",
-                ("admin", hash_password("admin123"), "admin"),
-            )
-
-        conn.commit()
-    except Exception as exc:
-        conn.rollback()
-        raise RuntimeError(f"No se pudo inicializar la base de datos: {exc}") from exc
-    finally:
-        if hasattr(cur, "close"):
-            cur.close()
-        if hasattr(conn, "close"):
-            conn.close()
+    return None
 
 
 def hash_password(password: str) -> str:
@@ -61,26 +19,11 @@ def hash_password(password: str) -> str:
 
 
 def authenticate_user(username: str, password: str):
-    try:
-        init_db()
-        conn = get_db_connection()
-        cur = conn.cursor()
-        try:
-            cur.execute("SELECT username, password_hash, role FROM users WHERE username = %s", (username,))
-            row = cur.fetchone()
-        finally:
-            if hasattr(cur, "close"):
-                cur.close()
-            if hasattr(conn, "close"):
-                conn.close()
-    except Exception as exc:
-        return {"success": False, "message": str(exc)}
-
-    if not row:
+    user = _users.get(username)
+    if not user:
         return {"success": False, "message": "Usuario no encontrado"}
 
-    stored_hash = row[1]
-    if hash_password(password) != stored_hash:
+    if hash_password(password) != user["password_hash"]:
         return {"success": False, "message": "Contraseña incorrecta"}
 
-    return {"success": True, "username": row[0], "role": row[2]}
+    return {"success": True, "username": user["username"], "role": user["role"]}

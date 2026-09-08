@@ -1,8 +1,5 @@
 {
   "name": "eventec",
   "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "pg": "^8.2.3"
-  }
+  "private": true
 }
